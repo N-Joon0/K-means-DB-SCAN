@@ -31,6 +31,14 @@ $ java A2_G11_t2 <filePath> <mu/eps>
  The input parameter may include values for mu and epsilon. If the input is an integer, it represents mu; if a floating number, it represents epsilon.
 
 ## Dataset
+- K-means++
+1. artset1.csv : given sample data
+2. artd-31.csv : givne sample data with includes two different density datasets
+3. D31.csv
+4. S2.csv
+5. R15.csv
+
+- DB-SCAN
 1. artset1.csv : given sample data
 2. artd-31.csv : givne sample data with includes two different density datasets
 3. artd-31_1.csv : Datasets that separate data with different densities fro 'artd-31.csv'
