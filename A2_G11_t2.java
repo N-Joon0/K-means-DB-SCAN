@@ -26,6 +26,127 @@ class Point {
     }
 }
 
+class DBSCAN {
+    private int mu; //minPts
+    private double eps;
+    public int cluster;
+
+    public DBSCAN(int mu, double eps) {
+        this.mu = mu;
+        this.eps = eps;
+        this.cluster = 1;
+    }
+
+    // Run the DB-SCAN algorithm on the given list of points    
+    public void run(List<Point> points) {
+        for (Point point : points) {
+            if (point.cluster == 0) {  // if clusterID of point is 0 => represents unclassfied.
+                if (expandCluster(point, points)) {
+                    cluster++;
+                    //System.out.println("one cluster find : " + cluster); // for debugging
+                }
+            }
+        }
+        calculateSilhouetteScore(points);
+    }
+
+    // Expancd the cluster starting from the given point
+    private boolean expandCluster(Point point, List<Point> points) {
+        List<Point> seeds = regionQuery(point, points);  // List of points located at a distance less than eps
+        if (seeds.size() < mu) {  // If the size is smaller than minPts, cluster cannot be formed.
+            point.cluster = -1; // Mark as noise
+            return false;
+        }
+
+        point.cluster = cluster;
+        for (Point seed : seeds) {  // Make them belong to the same cluster
+            seed.cluster = cluster;
+            //System.out.println("point : " + seed.id); // for debugging
+        }
+        //System.out.println("current point : " + point.id);  // for debugging
+        seeds.remove(point);
+
+        // Expand the cluster by checking whether other points belonging to the cluster are core points.
+        while (!seeds.isEmpty()) {   
+            Point current = seeds.get(0);
+            //System.out.println("current point : " + current.id); // for debugging
+            List<Point> result = regionQuery(current, points);
+            if (result.size() >= mu) {  // this means current point is core point
+                for (Point p : result) {  // expand cluster with new core point
+                    if (p.cluster == 0 || p.cluster == -1) {  // check neighbor of new core point is whether unclassified or noise.
+                        if (p.cluster == 0) {  // if neighbor fo new core point is unclassified, add on seed to check can be core point.
+                            seeds.add(p);
+                        }
+                        p.cluster = cluster;
+                    }
+                }
+            }
+            seeds.remove(0);
+        }
+        return true;
+    }
+
+    // Find all points within eps distance of the given point
+    private List<Point> regionQuery(Point point, List<Point> points) {
+        List<Point> result = new ArrayList<>();
+        for (Point p : points) {
+            if (point.distance(p) <= eps) {
+                result.add(p);
+            }
+        }
+        return result;
+    }
+
+    // when clustering done, calculate the silhouetteScore of each point.
+    private static void calculateSilhouetteScore(List<Point> points) {
+        for (Point point : points) {
+            if (point.cluster == -1) {  // Noise points do not contribute to the silhouette score
+                continue;
+            }
+
+            double a = calculateAverageDistance(point, points, point.cluster);
+            double b = Double.MAX_VALUE;
+
+            for (int clusterId = 1; clusterId <= getMaxCluster(points); clusterId++) {
+                if (clusterId != point.cluster) {
+                    double bTemp = calculateAverageDistance(point, points, clusterId);
+                    if (bTemp < b) {
+                        b = bTemp;
+                    }
+                }
+            }
+
+            point.silhouette_score = (b - a) / Math.max(a, b);
+        }
+    }
+
+    // calculate aveage distance between current point and another point which in another cluster
+    private static double calculateAverageDistance(Point point, List<Point> points, int clusterId) {
+        double totalDistance = 0.0;
+        int count = 0;
+
+        for (Point other : points) {
+            if (other.cluster == clusterId && !other.equals(point)) {
+                totalDistance += point.distance(other);
+                count++;
+            }
+        }
+
+        return count == 0 ? 0 : totalDistance / count;
+    }
+
+    // get the number of cluster
+    private static int getMaxCluster(List<Point> points) {
+        int maxCluster = 0;
+        for (Point point : points) {
+            if (point.cluster > maxCluster) {
+                maxCluster = point.cluster;
+            }
+        }
+        return maxCluster;
+    }
+}
+
 public class A2_G11_t2 {
     public static void main ( String[] args ) {
         if (args.length < 2 || args.length > 3) {
@@ -69,7 +190,7 @@ public class A2_G11_t2 {
         }
 
 
-        A2_G11_t2 dbscan = new A2_G11_t2(mu, eps);
+        DBSCAN dbscan = new DBSCAN(mu, eps);
         dbscan.run(points);  // start clustering
         //System.out.println("DBSCAN done");  // for debugging
 
@@ -141,7 +262,7 @@ public class A2_G11_t2 {
         double bestSilhouetteScore = Double.NEGATIVE_INFINITY;
 
         for (int mu : muCandidate) {
-            A2_G11_t2 dbscan = new A2_G11_t2(mu, eps);
+            DBSCAN dbscan = new DBSCAN(mu, eps);
             dbscan.run(points);
             double averageS_score = averageSilhouetteScore(points);
             //System.out.println("mu : " + mu + " eps : " + eps + " S_score = " + averageS_score);  // for debugging
@@ -170,54 +291,7 @@ public class A2_G11_t2 {
         return t_score / size;
     }
 
-    // when clustering done, calculate the silhouetteScore of each point.
-    private static void calculateSilhouetteScore(List<Point> points) {
-        for (Point point : points) {
-            if (point.cluster == -1) {  // Noise points do not contribute to the silhouette score
-                continue;
-            }
-
-            double a = calculateAverageDistance(point, points, point.cluster);
-            double b = Double.MAX_VALUE;
-
-            for (int clusterId = 1; clusterId <= getMaxCluster(points); clusterId++) {
-                if (clusterId != point.cluster) {
-                    double bTemp = calculateAverageDistance(point, points, clusterId);
-                    if (bTemp < b) {
-                        b = bTemp;
-                    }
-                }
-            }
-
-            point.silhouette_score = (b - a) / Math.max(a, b);
-        }
-    }
-
-    // calculate aveage distance between current point and another point which in another cluster
-    private static double calculateAverageDistance(Point point, List<Point> points, int clusterId) {
-        double totalDistance = 0.0;
-        int count = 0;
-
-        for (Point other : points) {
-            if (other.cluster == clusterId && !other.equals(point)) {
-                totalDistance += point.distance(other);
-                count++;
-            }
-        }
-
-        return count == 0 ? 0 : totalDistance / count;
-    }
-
-    // get the number of cluster
-    private static int getMaxCluster(List<Point> points) {
-        int maxCluster = 0;
-        for (Point point : points) {
-            if (point.cluster > maxCluster) {
-                maxCluster = point.cluster;
-            }
-        }
-        return maxCluster;
-    }
+    
 
     // Find optimization eps by k-distance method
     // To do, not complete
@@ -278,75 +352,5 @@ public class A2_G11_t2 {
         double dist =  Math.abs((cp.x - fp.x) * (lp.y - fp.y) 
                         - (cp.y - fp.y) * (lp.x - fp.x)) / normalLength;
         return dist;
-    }
-    
-    private int mu; //minPts
-    private double eps;
-    private int cluster;
-
-    public A2_G11_t2(int mu, double eps) {
-        this.mu = mu;
-        this.eps = eps;
-        this.cluster = 1;
-    }
-
-    // Run the DB-SCAN algorithm on the given list of points    
-    public void run(List<Point> points) {
-        for (Point point : points) {
-            if (point.cluster == 0) {  // if clusterID of point is 0 => represents unclassfied.
-                if (expandCluster(point, points)) {
-                    cluster++;
-                    //System.out.println("one cluster find : " + cluster); // for debugging
-                }
-            }
-        }
-        calculateSilhouetteScore(points);
-    }
-
-    // Expancd the cluster starting from the given point
-    private boolean expandCluster(Point point, List<Point> points) {
-        List<Point> seeds = regionQuery(point, points);  // List of points located at a distance less than eps
-        if (seeds.size() < mu) {  // If the size is smaller than minPts, cluster cannot be formed.
-            point.cluster = -1; // Mark as noise
-            return false;
-        }
-
-        point.cluster = cluster;
-        for (Point seed : seeds) {  // Make them belong to the same cluster
-            seed.cluster = cluster;
-            //System.out.println("point : " + seed.id); // for debugging
-        }
-        //System.out.println("current point : " + point.id);  // for debugging
-        seeds.remove(point);
-
-        // Expand the cluster by checking whether other points belonging to the cluster are core points.
-        while (!seeds.isEmpty()) {   
-            Point current = seeds.get(0);
-            //System.out.println("current point : " + current.id); // for debugging
-            List<Point> result = regionQuery(current, points);
-            if (result.size() >= mu) {  // this means current point is core point
-                for (Point p : result) {  // expand cluster with new core point
-                    if (p.cluster == 0 || p.cluster == -1) {  // check neighbor of new core point is whether unclassified or noise.
-                        if (p.cluster == 0) {  // if neighbor fo new core point is unclassified, add on seed to check can be core point.
-                            seeds.add(p);
-                        }
-                        p.cluster = cluster;
-                    }
-                }
-            }
-            seeds.remove(0);
-        }
-        return true;
-    }
-
-    // Find all points within eps distance of the given point
-    private List<Point> regionQuery(Point point, List<Point> points) {
-        List<Point> result = new ArrayList<>();
-        for (Point p : points) {
-            if (point.distance(p) <= eps) {
-                result.add(p);
-            }
-        }
-        return result;
     }
 }
